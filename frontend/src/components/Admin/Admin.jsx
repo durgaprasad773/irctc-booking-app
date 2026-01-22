@@ -4,6 +4,7 @@ import './Admin.css';
 
 const Admin = () => {
   const [trains, setTrains] = useState([]);
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     number: '',
@@ -42,8 +43,39 @@ const Admin = () => {
     }
   };
 
+  const calculateDuration = (departureTime, arrivalTime) => {
+    if (!departureTime || !arrivalTime) return '';
+    
+    const [depHours, depMinutes] = departureTime.split(':').map(Number);
+    const [arrHours, arrMinutes] = arrivalTime.split(':').map(Number);
+    
+    let depTotalMinutes = depHours * 60 + depMinutes;
+    let arrTotalMinutes = arrHours * 60 + arrMinutes;
+    
+    // If arrival time is less than departure time, add 24 hours (next day)
+    if (arrTotalMinutes < depTotalMinutes) {
+      arrTotalMinutes += 24 * 60;
+    }
+    
+    const diffMinutes = arrTotalMinutes - depTotalMinutes;
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+    
+    return `${hours}h ${minutes}m`;
+  };
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    const updatedData = { ...formData, [name]: value };
+    
+    // Auto-calculate duration when departure or arrival time changes
+    if (name === 'departure_time' || name === 'arrival_time') {
+      const departureTime = name === 'departure_time' ? value : formData.departure_time;
+      const arrivalTime = name === 'arrival_time' ? value : formData.arrival_time;
+      updatedData.duration = calculateDuration(departureTime, arrivalTime);
+    }
+    
+    setFormData(updatedData);
   };
 
   const handleSubmit = async (e) => {
@@ -60,8 +92,14 @@ const Admin = () => {
         ac2_available: parseInt(formData.ac2_available)
       };
 
-      const response = await fetch('http://localhost:5000/api/trains/add', {
-        method: 'POST',
+      const url = editingId 
+        ? `http://localhost:5000/api/trains/update/${editingId}`
+        : 'http://localhost:5000/api/trains/add';
+      
+      const method = editingId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -70,7 +108,7 @@ const Admin = () => {
       });
 
       if (response.ok) {
-        alert('Train added successfully!');
+        alert(editingId ? 'Train updated successfully!' : 'Train added successfully!');
         setFormData({
           name: '',
           number: '',
@@ -86,12 +124,13 @@ const Admin = () => {
           ac3_available: '',
           ac2_available: ''
         });
+        setEditingId(null);
         loadTrains();
       } else {
-        alert('Failed to add train');
+        alert(editingId ? 'Failed to update train' : 'Failed to add train');
       }
     } catch (error) {
-      alert('Error adding train');
+      alert(editingId ? 'Error updating train' : 'Error adding train');
     }
   };
 
@@ -112,6 +151,45 @@ const Admin = () => {
     }
   };
 
+  const editTrain = (train) => {
+    setEditingId(train.id);
+    setFormData({
+      name: train.name,
+      number: train.number,
+      source: train.source,
+      destination: train.destination,
+      departure_time: train.departure_time,
+      arrival_time: train.arrival_time,
+      duration: train.duration,
+      sleeper_fare: train.sleeper_fare.toString(),
+      ac3_fare: train.ac3_fare.toString(),
+      ac2_fare: train.ac2_fare.toString(),
+      sleeper_available: train.sleeper_available.toString(),
+      ac3_available: train.ac3_available.toString(),
+      ac2_available: train.ac2_available.toString()
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setFormData({
+      name: '',
+      number: '',
+      source: '',
+      destination: '',
+      departure_time: '',
+      arrival_time: '',
+      duration: '',
+      sleeper_fare: '',
+      ac3_fare: '',
+      ac2_fare: '',
+      sleeper_available: '',
+      ac3_available: '',
+      ac2_available: ''
+    });
+  };
+
   return (
     <div className="admin-container">
       <div className="admin-header">
@@ -121,7 +199,7 @@ const Admin = () => {
 
       <div className="admin-content">
         <div className="add-train-section">
-          <h2>Add New Train Route</h2>
+          <h2>{editingId ? 'Edit Train Route' : 'Add New Train Route'}</h2>
           <form onSubmit={handleSubmit} className="train-form">
             <div className="form-grid">
               <input
@@ -162,6 +240,7 @@ const Admin = () => {
                 value={formData.departure_time}
                 onChange={handleChange}
                 placeholder="Departure Time"
+                title="Select Departure Time"
                 required
               />
               <input
@@ -170,14 +249,15 @@ const Admin = () => {
                 value={formData.arrival_time}
                 onChange={handleChange}
                 placeholder="Arrival Time"
+                title="Select Arrival Time"
                 required
               />
               <input
                 type="text"
                 name="duration"
                 value={formData.duration}
-                onChange={handleChange}
-                placeholder="Duration (e.g., 8h 30m)"
+                placeholder="Duration"
+                readOnly
                 required
               />
               <input
@@ -186,6 +266,8 @@ const Admin = () => {
                 value={formData.sleeper_fare}
                 onChange={handleChange}
                 placeholder="Sleeper Fare"
+                min="0"
+                step="1"
                 required
               />
               <input
@@ -194,6 +276,8 @@ const Admin = () => {
                 value={formData.ac3_fare}
                 onChange={handleChange}
                 placeholder="AC 3-Tier Fare"
+                min="0"
+                step="1"
                 required
               />
               <input
@@ -202,6 +286,8 @@ const Admin = () => {
                 value={formData.ac2_fare}
                 onChange={handleChange}
                 placeholder="AC 2-Tier Fare"
+                min="0"
+                step="1"
                 required
               />
               <input
@@ -210,6 +296,8 @@ const Admin = () => {
                 value={formData.sleeper_available}
                 onChange={handleChange}
                 placeholder="Sleeper Seats"
+                min="0"
+                step="1"
                 required
               />
               <input
@@ -218,6 +306,8 @@ const Admin = () => {
                 value={formData.ac3_available}
                 onChange={handleChange}
                 placeholder="AC 3-Tier Seats"
+                min="0"
+                step="1"
                 required
               />
               <input
@@ -226,10 +316,21 @@ const Admin = () => {
                 value={formData.ac2_available}
                 onChange={handleChange}
                 placeholder="AC 2-Tier Seats"
+                min="0"
+                step="1"
                 required
               />
             </div>
-            <button type="submit" className="submit-btn">Add Train</button>
+            <div className="form-buttons">
+              <button type="submit" className="submit-btn">
+                {editingId ? 'Update Train' : 'Add Train'}
+              </button>
+              {editingId && (
+                <button type="button" onClick={cancelEdit} className="cancel-btn">
+                  Cancel Edit
+                </button>
+              )}
+            </div>
           </form>
         </div>
 
@@ -246,10 +347,20 @@ const Admin = () => {
                     <p>#{train.number}</p>
                     <p>{train.source} → {train.destination}</p>
                     <p>{train.departure_time} - {train.arrival_time}</p>
+                    <div className="seat-info">
+                      <span>Sleeper: {train.sleeper_available}</span>
+                      <span>AC3: {train.ac3_available}</span>
+                      <span>AC2: {train.ac2_available}</span>
+                    </div>
                   </div>
-                  <button onClick={() => deleteTrain(train.id)} className="delete-btn">
-                    Delete
-                  </button>
+                  <div className="train-actions">
+                    <button onClick={() => editTrain(train)} className="edit-btn">
+                      Edit
+                    </button>
+                    <button onClick={() => deleteTrain(train.id)} className="delete-btn">
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))
             )}

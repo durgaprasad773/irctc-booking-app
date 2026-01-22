@@ -10,6 +10,8 @@ const BookTicket = () => {
   const [passengers, setPassengers] = useState([{ name: '', age: '', gender: '', berth: '' }]);
   const [selectedClass, setSelectedClass] = useState('Sleeper');
   const [savedPassengers, setSavedPassengers] = useState([]);
+  const [currentTrain, setCurrentTrain] = useState(train);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!train || !date) {
@@ -18,10 +20,23 @@ const BookTicket = () => {
     }
     const saved = localStorage.getItem('passengers');
     if (saved) setSavedPassengers(JSON.parse(saved));
+    
+    // Fetch latest train details to get updated seat availability
+    fetchLatestTrainDetails();
   }, [train, date, navigate]);
 
-  const addPassenger = () => {
-    setPassengers([...passengers, { name: '', age: '', gender: '', berth: '' }]);
+  const fetchLatestTrainDetails = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/trains/${train.id}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const latestTrain = await response.json();
+        setCurrentTrain(latestTrain);
+      }
+    } catch (error) {
+      console.error('Error fetching latest train details:', error);
+    }
   };
 
   const removePassenger = (index) => {
@@ -40,21 +55,84 @@ const BookTicket = () => {
     setPassengers(updated);
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Fetch latest seat availability before proceeding
+    setLoading(true);
+    await fetchLatestTrainDetails();
+    
+    const availableSeats = getAvailableSeats();
+    
+    if (availableSeats <= 0) {
+      alert(`No seats available in ${selectedClass}. Please select a different class.`);
+      setLoading(false);
+      return;
+    }
+    
+    if (passengers.length > availableSeats) {
+      alert(`Only ${availableSeats} seat${availableSeats !== 1 ? 's' : ''} available in ${selectedClass}. You are trying to book ${passengers.length} seat${passengers.length !== 1 ? 's' : ''}.`);
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(false);
+    navigate('/payment', { state: { train: currentTrain, date, passengers, selectedClass, total: calculateTotal() } });
+  };
+
   const calculateTotal = () => {
     const fareMap = {
-      'Sleeper': train.sleeper_fare,
-      'AC 3-Tier': train.ac3_fare,
-      'AC 2-Tier': train.ac2_fare
+      'Sleeper': currentTrain.sleeper_fare,
+      'AC 3-Tier': currentTrain.ac3_fare,
+      'AC 2-Tier': currentTrain.ac2_fare
     };
     return passengers.length * fareMap[selectedClass];
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    navigate('/payment', { state: { train, date, passengers, selectedClass, total: calculateTotal() } });
+  const getAvailableSeats = () => {
+    const seatsMap = {
+      'Sleeper': currentTrain.sleeper_available,
+      'AC 3-Tier': currentTrain.ac3_available,
+      'AC 2-Tier': currentTrain.ac2_available
+    };
+    return seatsMap[selectedClass];
   };
 
-  if (!train) return <Loading />;
+  const handleClassChange = (newClass) => {
+    setSelectedClass(newClass);
+    const seatsMap = {
+      'Sleeper': currentTrain.sleeper_available,
+      'AC 3-Tier': currentTrain.ac3_available,
+      'AC 2-Tier': currentTrain.ac2_available
+    };
+    const availableSeats = seatsMap[newClass];
+    
+    if (availableSeats <= 0) {
+      alert(`No seats available in ${newClass}. Please select a different class.`);
+      return;
+    }
+    
+    if (passengers.length > availableSeats) {
+      alert(`Only ${availableSeats} seat${availableSeats !== 1 ? 's' : ''} available in ${newClass}. Reducing passengers to ${availableSeats}.`);
+      // Reduce passengers to available seats
+      setPassengers(passengers.slice(0, Math.max(1, availableSeats)));
+    }
+  };
+
+  const addPassenger = () => {
+    const availableSeats = getAvailableSeats();
+    if (availableSeats <= 0) {
+      alert(`No seats available in ${selectedClass}. Please select a different class.`);
+      return;
+    }
+    if (passengers.length >= availableSeats) {
+      alert(`Maximum ${availableSeats} seat${availableSeats !== 1 ? 's' : ''} available in ${selectedClass}`);
+      return;
+    }
+    setPassengers([...passengers, { name: '', age: '', gender: '', berth: '' }]);
+  };
+
+  if (!currentTrain) return <Loading />;
 
   return (
     <div className="book-container">
@@ -64,11 +142,11 @@ const BookTicket = () => {
       </div>
 
       <div className="train-summary">
-        <h3>{train.name} (#{train.number})</h3>
+        <h3>{currentTrain.name} (#{currentTrain.number})</h3>
         <div className="summary-details">
-          <span>{train.source} → {train.destination}</span>
+          <span>{currentTrain.source} → {currentTrain.destination}</span>
           <span>{new Date(date).toLocaleDateString()}</span>
-          <span>{train.departure_time} - {train.arrival_time}</span>
+          <span>{currentTrain.departure_time} - {currentTrain.arrival_time}</span>
         </div>
       </div>
 
@@ -82,9 +160,14 @@ const BookTicket = () => {
                 name="class"
                 value="Sleeper"
                 checked={selectedClass === 'Sleeper'}
-                onChange={(e) => setSelectedClass(e.target.value)}
+                onChange={(e) => handleClassChange(e.target.value)}
               />
-              Sleeper - ₹{train.sleeper_fare}
+              <div className="class-info">
+                <span>Sleeper - ₹{currentTrain.sleeper_fare}</span>
+                <span className="seats-available">
+                  {currentTrain.sleeper_available} seat{currentTrain.sleeper_available !== 1 ? 's' : ''} available
+                </span>
+              </div>
             </label>
             <label className={selectedClass === 'AC 3-Tier' ? 'active' : ''}>
               <input
@@ -92,9 +175,14 @@ const BookTicket = () => {
                 name="class"
                 value="AC 3-Tier"
                 checked={selectedClass === 'AC 3-Tier'}
-                onChange={(e) => setSelectedClass(e.target.value)}
+                onChange={(e) => handleClassChange(e.target.value)}
               />
-              AC 3-Tier - ₹{train.ac3_fare}
+              <div className="class-info">
+                <span>AC 3-Tier - ₹{currentTrain.ac3_fare}</span>
+                <span className="seats-available">
+                  {currentTrain.ac3_available} seat{currentTrain.ac3_available !== 1 ? 's' : ''} available
+                </span>
+              </div>
             </label>
             <label className={selectedClass === 'AC 2-Tier' ? 'active' : ''}>
               <input
@@ -102,9 +190,14 @@ const BookTicket = () => {
                 name="class"
                 value="AC 2-Tier"
                 checked={selectedClass === 'AC 2-Tier'}
-                onChange={(e) => setSelectedClass(e.target.value)}
+                onChange={(e) => handleClassChange(e.target.value)}
               />
-              AC 2-Tier - ₹{train.ac2_fare}
+              <div className="class-info">
+                <span>AC 2-Tier - ₹{currentTrain.ac2_fare}</span>
+                <span className="seats-available">
+                  {currentTrain.ac2_available} seat{currentTrain.ac2_available !== 1 ? 's' : ''} available
+                </span>
+              </div>
             </label>
           </div>
         </div>
@@ -183,7 +276,7 @@ const BookTicket = () => {
           </div>
           <div className="fare-row">
             <span>Fare per passenger</span>
-            <span>₹{selectedClass === 'Sleeper' ? train.sleeper_fare : selectedClass === 'AC 3-Tier' ? train.ac3_fare : train.ac2_fare}</span>
+            <span>₹{selectedClass === 'Sleeper' ? currentTrain.sleeper_fare : selectedClass === 'AC 3-Tier' ? currentTrain.ac3_fare : currentTrain.ac2_fare}</span>
           </div>
           <div className="fare-row total">
             <span>Total Amount</span>
@@ -191,7 +284,9 @@ const BookTicket = () => {
           </div>
         </div>
 
-        <button type="submit" className="proceed-btn">Proceed to Payment</button>
+        <button type="submit" className="proceed-btn" disabled={loading}>
+          {loading ? 'Checking Availability...' : 'Proceed to Payment'}
+        </button>
       </form>
     </div>
   );

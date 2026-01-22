@@ -74,9 +74,52 @@
   transition: border-color 0.3s;
 }
 
+/* Remove spinner arrows from number inputs */
+.form-grid input[type="number"]::-webkit-inner-spin-button,
+.form-grid input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.form-grid input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .form-grid input:focus {
   outline: none;
   border-color: #ff6b35;
+}
+
+.form-grid input[readonly] {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  color: #666;
+}
+
+.form-grid input[type="time"] {
+  position: relative;
+}
+
+.form-grid input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  display: none;
+}
+
+.form-grid input[type="time"]:focus::-webkit-datetime-edit-fields-wrapper,
+.form-grid input[type="time"]:valid::-webkit-datetime-edit-fields-wrapper {
+  display: inline-flex;
+}
+
+.form-grid input[type="time"]::before {
+  content: attr(placeholder);
+  color: #999;
+  position: absolute;
+  left: 0.8rem;
+  pointer-events: none;
+}
+
+.form-grid input[type="time"]:focus::before,
+.form-grid input[type="time"]:valid::before {
+  display: none;
 }
 
 .submit-btn {
@@ -95,6 +138,29 @@
 .submit-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(255, 107, 53, 0.3);
+}
+
+.form-buttons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.cancel-btn {
+  background: #95a5a6;
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.cancel-btn:hover {
+  background: #7f8c8d;
+  transform: translateY(-2px);
 }
 
 .trains-table {
@@ -127,6 +193,40 @@
 .train-info p {
   color: #7f8c8d;
   margin: 0.3rem 0;
+}
+
+.seat-info {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.seat-info span {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 0.3rem 0.8rem;
+  border-radius: 5px;
+  font-weight: 500;
+}
+
+.train-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.edit-btn {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.edit-btn:hover {
+  background: #2980b9;
 }
 
 .delete-btn {

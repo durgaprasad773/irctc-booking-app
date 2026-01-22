@@ -29,12 +29,6 @@ const Payment = () => {
       try {
         const token = localStorage.getItem('token');
         
-        const classMap = {
-          'Sleeper': 'sleeper',
-          'AC 3-Tier': 'ac3',
-          'AC 2-Tier': 'ac2'
-        };
-        
         const response = await fetch('http://localhost:5000/api/bookings/create', {
           method: 'POST',
           headers: {
@@ -44,7 +38,7 @@ const Payment = () => {
           body: JSON.stringify({
             train_id: train.id,
             journey_date: date,
-            class: classMap[selectedClass] || selectedClass.toLowerCase(),
+            class: selectedClass,
             passengers: passengers,
             total_fare: total,
             payment_method: selectedPayment || newPayment.type
@@ -67,9 +61,28 @@ const Payment = () => {
             bookedAt: new Date().toISOString()
           });
           localStorage.setItem('bookings', JSON.stringify(bookings));
+          
+          // Show success message with remaining seats
+          if (data.remainingSeats !== undefined) {
+            console.log(`Booking successful. ${data.seatsBooked} seat(s) booked. ${data.remainingSeats} seat(s) remaining.`);
+          }
+          
           navigate('/confirmation', { state: { booking: data, pnr: data.pnr } });
         } else {
-          alert('Payment failed. Please try again.');
+          // Handle seat availability error or other errors
+          if (data.availableSeats !== undefined) {
+            if (data.availableSeats === 0) {
+              alert(`Booking Failed: No seats available in ${selectedClass}. All seats have been booked.`);
+            } else if (data.requestedSeats) {
+              alert(`Booking Failed: ${data.message}\\n\\nAvailable: ${data.availableSeats} seat${data.availableSeats !== 1 ? 's' : ''}\\nRequested: ${data.requestedSeats} seat${data.requestedSeats !== 1 ? 's' : ''}`);
+            } else {
+              alert(data.message);
+            }
+            // Redirect back to search to see updated availability
+            navigate('/search', { state: { source: train.source, destination: train.destination, date: date } });
+          } else {
+            alert(data.message || 'Payment failed. Please try again.');
+          }
         }
       } catch (error) {
         console.error('Booking error:', error);
